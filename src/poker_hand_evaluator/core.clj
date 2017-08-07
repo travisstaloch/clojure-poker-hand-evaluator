@@ -1,7 +1,11 @@
 (ns poker-hand-evaluator.core
-  (:use [poker-hand-evaluator.lookup-tables])
-  (:use [poker-hand-evaluator.lookup-tables-bin-search])
-  (:use [clojure.math.combinatorics]))
+  (:use [poker-hand-evaluator.lookup-tables]
+        [poker-hand-evaluator.lookup-tables-bin-search]
+        [clojure.math.combinatorics]
+        [clojure.stacktrace]
+        ;;[clj-stacktrace.core]
+        ))
+
 
 (comment "
 - By Travis Staloch
@@ -18,6 +22,8 @@ https://github.com/baleful/Poker-Hand-Evaluator.
   7x faster on average!!
   -- Profiling with tufte shows slightly more than 50x faster!!!
   -- Doh! I believe these figures were wrong and have decided real difference is ~50% faster
+  -- AH HA! These LAZY sequences weren't actually being evaluated which was throwing off my
+  benchmarks.  I believe perfect hashing is actually 2x to 3x faster than binary search
 - Attempted to eliminate repeated use of '& 0xffffffff' in fast-find-hash-adjust
 function but couldn't get it working using java.math.BigInteger bit operations.
 Not sure what the problem is but left attempt in as fast-find-hash-adjust2.
@@ -27,12 +33,17 @@ Hoping for better performance.
 So the ace of spades can be 'AS' 'as' 'As' or 'aS' in addition to 'A♠'
 - Added omaha evaluation which uses exactly 2/4 hold cards and 3/5 board cards
 - Changed lookup tables from PersistentVectors to ArrayLists to improve lookup times.
-- Added speed tests for 5, 7 and 9 card hands.  9 card uses omaha evaluation
+- Added speed tests for 5, 7 and 9 card hands.  9 card doesn't use omaha evaluation
 - Replaced some uses of apply and #() lambdas with .applyTo and local function
 not sure if performance improved.
 - Added low and hi-low evaluations.
 - Added exception catching in a few places where some funny errors were happening
 during benchmarking.
+- Finally tracked down error caused by prep-samples in testing which was trying to
+separate 9 cards into board and pockets seqs.  Just took this out.  Not performance
+testing omaha.
+- Changed from ArrayList lookup tables to int-array for slight performance gain.
+Had to include custom binary-search implementation which uses aget.
 
 TODO:
 - Add tests for hi-low evaluations
@@ -43,6 +54,14 @@ or firgure out if clojure compiler does dead code elimination for us (dont think
 
 (comment (def profiles (->> "project.clj" slurp read-string (drop 3) (partition 2) (map vec) (into {})
                   :profiles)))
+
+(defn- log-exception [e & info]
+  (printf "Caught exception: %s %s Info: %s %n%n" (.getMessage e)
+    (with-out-str (print-stack-trace e 25))
+    ;;(clojure.string/join ", " (map str info))
+    (with-out-str (pr info))
+    ))
+
 
 (def suit-details
   "Available suits and the respective bit pattern to be used in the card format"
@@ -126,16 +145,20 @@ or firgure out if clojure compiler does dead code elimination for us (dont think
          (generate-deck suit-details-character-uppercase face-details-lowercase)
          (generate-deck suit-details-character-lowercase face-details-lowercase) ))
 
-(defn- log-exception [e & info]
-  (printf "Caught exception: %s info: %s %n" (.getMessage e) (clojure.string/join ", " (map str info))))
-
 (defn- calculate-hand-index
   "The hand index is calculated using:
   (c1 OR c2 OR c3 OR c4 OR c5) >> 16
   This value can be used later to find values in lookup tables."
-  [cards] (try (bit-shift-right (reduce bit-or cards) 16)
-            (catch Exception e (log-exception e :calculate-hand-index :cards (with-out-str (pr cards)))
-            0)))
+  [cards] ;;(try
+    (if (and (seq? cards) (not (nil? (first cards))) (= java.lang.Long (type (first cards))))
+      (bit-shift-right (reduce bit-or cards) 16)
+      (throw  (Exception. (str "cards must be seq of Longs. Received: seq?: "
+        (seq? cards) ". type first: " (type (first cards)) ".  cards: "
+        (with-out-str (pr cards))))))
+
+          ;;  (catch Exception e
+          ;;    (log-exception e :calculate-hand-index :cards (with-out-str (pr cards))) 0)
+            )
 
 (defn- flush-hand
   "The following expression is used to check if the hand is a flush:
@@ -143,19 +166,16 @@ or firgure out if clojure compiler does dead code elimination for us (dont think
    If the expression returns a non-zero value, then we have a flush and can use the lookup table for flushes
    to resolve the hand rank."
   [hand-index card-values]
-  (try (and
+  (and
     (not= (bit-and (.applyTo bit-and card-values) 0xF000) 0)
-    (.get flush-to-rank hand-index))
-    (catch Exception e (log-exception e :flush-hand (with-out-str (pr hand-index card-values)))
-    0)))
+    (aget flush-to-rank hand-index)))
 
 (defn- unique-card-hand
   "Straights or High Card hands are resolved using a specific lookup table to resolve hand with 5 unique cards.
   This lookup will return a hand rank only for straights and high cards (0 for any other hand)."
   [hand-index]
-  (try (let [hand-rank (.get unique5-to-rank hand-index)]
-    (and (not= hand-rank 0) hand-rank))
-    (catch Exception e (log-exception e :unique-card-hand hand-index) 0)))
+  (let [hand-rank (aget unique5-to-rank hand-index)]
+    (and (not= hand-rank 0) hand-rank)))
 
 (comment "
 // from https://github.com/baleful/Poker-Hand-Evaluator Java perfect hash implementation
@@ -200,7 +220,7 @@ private static int find(long u) {
              (bit-and 0xffffffff))
          b (bit-and (bit-shift-right x 8) 0x1ff)
          a (bit-shift-right (bit-and (+ x (bit-and (bit-shift-left x 2) 0xffffffff)) 0xffffffff)  19)
-         r (bit-xor a (.get hash-adjust b))]
+         r (bit-xor a (aget hash-adjust b))]
          r)))
 
 (defn fast-find-hash-adjust [card-values]
@@ -215,7 +235,7 @@ private static int find(long u) {
          b (bit-and (unsigned-bit-shift-right x 8) 0x1ff)
          a (unsigned-bit-shift-right
              (bit-and (+ x (bit-shift-left x 2)) 0xffffffff) 19)
-         r (bit-xor a (.get hash-adjust b))]
+         r (bit-xor a (aget hash-adjust b))]
     r))
 ;; (fast-find-hash-adjust3 94352849)  ;; should == 7649
 
@@ -223,7 +243,7 @@ private static int find(long u) {
   (let [fn1 (fn [cv] (bit-and cv 0xFF))
         q (reduce * (map fn1 card-values))
         q-index (fast-find-hash-adjust q)]
-    (or (.get hash-values q-index) false)))
+    (or (aget hash-values q-index) false)))
 
 (defn- calculate-hand-rank
   "Uses the following strategies to find the hand rank, in order:
@@ -309,15 +329,32 @@ private static int find(long u) {
   "when given hand as one string (ie askcad2c5h) split into list of cards"
   [hand] (map #(clojure.string/join %) (partition 2 hand)))
 
+(defn binary-search
+  "Finds earliest occurrence of x in xs (a vector) using binary search."
+  ([xs x]
+   (loop [l 0 h (unchecked-dec (count xs))]
+     (if (<= h (inc l))
+       (cond
+         (== x (aget xs l)) l
+         (== x (aget xs h)) h
+         :else nil)
+       (let [m (unchecked-add l (bit-shift-right (unchecked-subtract h l) 1))]
+         (if (< (aget xs m) x)
+           (recur (unchecked-inc m) h)
+           (recur l m)))))))
+
 (defn- other-hands-bin-search
   "Other hands are all non-flush and non-unique5. We first calculate the prime product of all cards:
   q = (c1 AND 0xFF) * (c2 AND 0xFF) * ... * (c5 AND 0xFF)
   Because the range of q is huge (48-100M+), we use 2 lookup tables: we search the index of q on the first
   and then use this index on the second to find the actual hand rank."
   [card-values]
-  (let [q (reduce * (map #(bit-and % 0xFF) card-values))
-        q-index (java.util.Collections/binarySearch prime-product-to-combination q)]
-    (or (.get combination-to-rank q-index) false)))
+  (let [bit-and-fn  (fn [n] (bit-and n 0xFF))
+        q (reduce * (map bit-and-fn card-values))
+        q-index (binary-search prime-product-to-combination q)
+        ;;q-index (java.util.Collections/binarySearch prime-product-to-combination q)
+        ]
+    (or (aget combination-to-rank q-index) false)))
 
 (defn- evaluate-hand-bin-search
   "Evaluates a 5-card poker hand, returning a map including its name and rank using binary search "
@@ -329,7 +366,8 @@ private static int find(long u) {
 (defn- evaluate-all-combinations-b
   "Evaluates all possible 5-card combinations for a hand"
   [hand]
-  (let [evfn (fn [h] (.applyTo evaluate-hand-bin-search h))] (map evfn (combinations hand 5))))
+  (let [evfn (fn [h] (.applyTo evaluate-hand-bin-search h))]
+    (map evfn (combinations hand 5))))
 
 (defn evaluate-b
   "Evaluates a poker hand. If it contains more than 5 cards, it returns the best hand possible"

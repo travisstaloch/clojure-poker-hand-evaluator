@@ -4,6 +4,8 @@
             [poker-hand-evaluator.core :refer :all]
             ))
 
+(set! *warn-on-reflection* true)
+
 (defn- base2-str [x] (Integer/toString (int x) 2))
 
 (defn hand
@@ -213,7 +215,6 @@
     (is (= :TwoPairs (hd9 (combine-card-str2 holdem-board2 omaha-pocket4))))
     (is (= :OnePair  (hd9 (combine-card-str2 holdem-board3 omaha-pocket5))))
     (is (= :ThreeOfAKind (hd9 (combine-card-str2 holdem-board4 omaha-pocket6))))
-
            ))
   ])
 
@@ -222,25 +223,24 @@
    (gen/elements (keys deck))
    {:min-elements n :max-elements n}))
 
-(defn speed-test-fn [title n-samples n-cards eval-fn]
+(defn speed-test-fn [title n-samples n-cards rk-fn]
   (let [samples (gen/sample (random-hand-ncards n-cards) n-samples)
-        prep-sample (fn [s] (if (= n-cards 9) [(take 4 s) (drop 4 s)] s))
         ms (fn [t] (/ t 1000000.0))
         start (. System (nanoTime))
-        ;;x (map #((rk7 % evaluate-b)) samples)
-        x (for [s samples] (eval-fn (prep-sample s) evaluate-b))
+        x (for [s samples] (rk-fn s evaluate-b))
+        countx (count x) ;; lazy - make sure these are evaluated
         done1 (. System (nanoTime))
         start2 (. System (nanoTime))
-        ;;y (map #(rk7) samples)
-        y (for [s samples] (eval-fn (prep-sample s)))
+        y (for [s samples] (rk-fn s))
+        county (count y) ;; lazy - make sure these are evaluated
         done2 (. System (nanoTime))
         bin-time (ms (double (- done1 start)))
         hash-time (ms (double (- done2 start2)))]
-    (prn :first10x (take 1 x) :first10y (take 1 y))
+    (prn :counts countx county)
     (printf  "%s - binary-search-time: %fms hash-time: %fms - thats %f times faster%n"
              title bin-time hash-time (/ bin-time hash-time))))
 
-(def benchmark-runs 10000)
+(def benchmark-runs 100)
 (deftest speed-test1
   (testing "binary search vs perfect hashing performance comparison 5 card hands"
            (speed-test-fn "1. (5 cards)" benchmark-runs 5 rk5)
@@ -255,3 +255,15 @@
   (testing "binary search vs perfect hashing performance comparison 9 card hands"
            (speed-test-fn "3. (9 cards)" benchmark-runs 9 rk7)
            (is true)))
+
+(comment (deftest array-lookup-speed-test
+  (testing "are int-array lookups faster than ArrayList?"
+           (let [arrsize 10000001
+                 intarr (int-array arrsize)
+                 arrlist (new java.util.ArrayList (range arrsize))
+                 time1 (with-out-str (time (dotimes [x arrsize] (aget intarr x))))
+                 time2 (with-out-str (time (dotimes [x arrsize] (.get arrlist x))))
+                 ]
+             (printf "int-array lookup time: %s.  ArrayList lookup time: %s" time1 time2)
+             ))
+  ))

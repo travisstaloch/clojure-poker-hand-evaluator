@@ -8,10 +8,12 @@
                      :injections [(prn (into {} (System/getProperties)))]}
              ;; activated by default
              :dev {:resource-paths [""]
-                   :dependencies [[clj-stacktrace "0.2.4"]
+                   :dependencies [;;[clj-stacktrace "0.2.4"]
                                   [org.clojure/test.check "0.9.0"]
-                                  [com.taoensso/tufte "1.1.1"]
-                                  [criterium "0.4.4"]]
+                                  ;;[com.taoensso/tufte "1.1.1"]
+                                  ;;[criterium "0.4.4"]
+                                  ;;[clj-stacktrace "0.2.8"]
+                                  ]
                    :plugins [[quickie "0.2.5"]]
                    :env {:performance-test false}
                    }
