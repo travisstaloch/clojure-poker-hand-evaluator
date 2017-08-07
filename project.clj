@@ -13,6 +13,7 @@
                                   ;;[com.taoensso/tufte "1.1.1"]
                                   ;;[criterium "0.4.4"]
                                   ;;[clj-stacktrace "0.2.8"]
+                                  [environ "1.0.0"]
                                   ]
                    :plugins [[quickie "0.2.5"]]
                    :env {:performance-test false}

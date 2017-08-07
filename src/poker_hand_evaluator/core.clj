@@ -44,9 +44,11 @@ separate 9 cards into board and pockets seqs.  Just took this out.  Not performa
 testing omaha.
 - Changed from ArrayList lookup tables to int-array for slight performance gain.
 Had to include custom binary-search implementation which uses aget.
+- Added omaha-hi-low evaluation
 
 TODO:
-- Add tests for hi-low evaluations
+X - Add tests for hi-low evaluations
+X - Add omaha-hi-low evaluation
 - remove binary search lookup tables and code or figure out how to exclude ns in project file
 or firgure out if clojure compiler does dead code elimination for us (dont think so)
 
@@ -140,6 +142,7 @@ or firgure out if clojure compiler does dead code elimination for us (dont think
 (def deck2
   "Multi deck allowing upper/lowercase faces and suits as is 'As' for ace of spades"
   (merge (generate-deck suit-details face-details)
+         (generate-deck suit-details face-details-lowercase)
          (generate-deck suit-details-character-uppercase face-details)
          (generate-deck suit-details-character-lowercase face-details)
          (generate-deck suit-details-character-uppercase face-details-lowercase)
@@ -284,7 +287,8 @@ private static int find(long u) {
     {:cards hand :rank hand-rank :hand rank-name}))
 
 (defn- *est-rank [rank-fn evaluated-hands]
-  (first (sort #(rank-fn (%1 :rank) (%2 :rank)) evaluated-hands)))
+  (let [rkfn (fn [a b] (rank-fn (a :rank) (b :rank)) )]
+    (first (sort rkfn evaluated-hands))))
 
 (defn- highest-rank
   "Finds the highest rank for a list of evaluated hands"
@@ -294,10 +298,14 @@ private static int find(long u) {
   "Finds the lowest rank for a list of evaluated hands"
   [evaluated-hands] (*est-rank > evaluated-hands))
 
-(defn- hi-and-lowest-ranks [rank-fn evaluated-hands]
+(defn- hi-and-lowest-ranks
   "Finds the highest and lowest rank for a list of evaluated hands"
-  (let [sorted-hands (sort #(rank-fn (%1 :rank) (%2 :rank)) evaluated-hands)]
-    (list (first sorted-hands) (last sorted-hands))))
+  ([evaluated-hands]
+    (let [rkfn (fn [a b]
+      ;;(prn :a a :b b)
+      (< (a :rank) (b :rank)))
+          sorted-hands (sort rkfn evaluated-hands)]
+      {:hi (first sorted-hands) :low (last sorted-hands)})))
 
 (defn- evaluate-all-combinations
   "Evaluates all possible 5-card combinations for a hand"
@@ -307,23 +315,41 @@ private static int find(long u) {
   "Evaluates a poker hand. If it contains more than 5 cards, it returns the best hand possible"
   [& hand] (highest-rank (evaluate-all-combinations hand)))
 
-(defn evaluate-lowest [& hand] (lowest-rank (evaluate-all-combinations hand)))
+(defn evaluate-low [& hand] (lowest-rank (evaluate-all-combinations hand)))
 
 (defn evaluate-hi-low [& hand] (hi-and-lowest-ranks (evaluate-all-combinations hand)))
 
-(defn- ev-omaha
-  "Evaluates an omaha hand. It returns the best hand possible for all combinations of 2 pocket + 3 board hands"
-  ([board pockets eval-fn rank-fn]
-    (let [evfn (fn [h] (.applyTo eval-fn h))]
-      (rank-fn (map evfn
-        (for [two-pock (combinations pockets 2)
-              three-board (combinations board 3)] (concat two-pock three-board))))))
-  ([board pockets eval-fn] (ev-omaha board pockets eval-fn highest-rank))
-  ([board pockets] (ev-omaha board pockets evaluate highest-rank)))
+(defn- concat-omaha [board pockets evfn]
+  (map evfn
+    (for [two-pock (combinations pockets 2)
+          three-board (combinations board 3)] (concat two-pock three-board))))
 
-(defn evaluate-omaha ([board pockets eval-fn]
-  (ev-omaha board pockets eval-fn))
+(defn- ev-omaha
+  ([board pockets eval-fn]
+    (let [evfn (fn [h] (.applyTo eval-fn h))]
+      (highest-rank (concat-omaha board pockets evfn)))))
+
+(defn evaluate-omaha
+  "Evaluates an omaha hand. It returns the best hand possible for all combinations of 2 pocket + 3 board hands"
+  ([board pockets eval-fn] (ev-omaha board pockets eval-fn))
   ([board pockets] (evaluate-omaha board pockets evaluate)))
+
+(defn- highest-hi-lowest-low-rank
+  "Find highest hi and lowest low of many given hi-low evaluations"
+  [hl-evaluated-hands]
+  (let [rkfn (fn [a b] (< (a :rank) (b :rank)))]
+    {:hi (first (sort rkfn (map #(:hi %) hl-evaluated-hands)))
+     :low (last (sort rkfn (map #(:low %) hl-evaluated-hands)))}))
+
+(defn- ev-omaha-hi-low
+  ([board pockets eval-fn]
+   (let [evfn (fn [h] (.applyTo eval-fn h))]
+     (highest-hi-lowest-low-rank (concat-omaha board pockets evfn)))))
+
+(defn evaluate-omaha-hi-low
+  "Evaluate all possible omaha hands for board/pockets and then find highest hi and lowest low"
+  ([board pockets eval-fn] (ev-omaha-hi-low board pockets eval-fn))
+  ([board pockets] (evaluate-omaha-hi-low board pockets evaluate-hi-low)))
 
 (defn split-hand
   "when given hand as one string (ie askcad2c5h) split into list of cards"

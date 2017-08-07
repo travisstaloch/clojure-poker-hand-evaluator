@@ -2,6 +2,7 @@
   (:require [clojure.test :refer :all]
             [clojure.test.check.generators :as gen]
             [poker-hand-evaluator.core :refer :all]
+            [environ.core :refer [env] ]
             ))
 
 (set! *warn-on-reflection* true)
@@ -98,7 +99,7 @@
   (comment (testing "Contains 52 cards"
     (is (= 52 (count deck)))))
   (testing "deck2 contains 196 cards lookups adding upper and lowercase suits and faces to standard deck"
-    (is (= 196 (count deck2))))
+    (is (= 216 (count deck2))))
   (comment (testing "Cards are standard"
     (is (= (set (for [s '("♣" "♥" "♠" "♦") f '("2" "3" "4" "5" "6" "7" "8" "9" "T" "J" "Q" "K" "A")] (str f s)))
           (set (keys deck))))))
@@ -216,7 +217,32 @@
     (is (= :OnePair  (hd9 (combine-card-str2 holdem-board3 omaha-pocket5))))
     (is (= :ThreeOfAKind (hd9 (combine-card-str2 holdem-board4 omaha-pocket6))))
            ))
-  ])
+
+(deftest low-eval
+  (testing "low-eval"
+           (is (= (evaluate-low "2c" "2d" "3h" "3d" "4s" "5c" "7h")
+              { :rank 7462, :hand :HighCard, :cards '("2c" "3h" "4s" "5c" "7h")}))
+))
+
+(deftest hi-low-eval
+  (testing "hi-low-eval"
+     (is (= (evaluate-hi-low "2c" "2d" "3h" "3d" "4s" "5c" "7h")
+            {:hi {:cards '("2c" "2d" "3h" "3d" "7h"), :rank 3322, :hand :TwoPairs},
+            :low {:cards '("2d" "3d" "4s" "5c" "7h"), :rank 7462, :hand :HighCard}}
+            ))
+     ))
+
+(deftest omaha-hi-low-eval
+  (testing "omaha-hi-low-eval"
+     (is (= (evaluate-omaha-hi-low ["2c" "3d" "4s" "5c" "7h"] ["2d" "3h" "8d" "9h"])
+            {:hi {:cards '("2d" "3h" "2c" "3d" "7h"), :rank 3322, :hand :TwoPairs},
+             :low {:cards '("2d" "3h" "4s" "5c" "7h"), :rank 7462, :hand :HighCard}}
+            ))
+     ))
+])
+
+
+(if (env :performance-test) (do
 
 (defn random-hand-ncards [n]
   (gen/vector-distinct
@@ -266,4 +292,4 @@
                  ]
              (printf "int-array lookup time: %s.  ArrayList lookup time: %s" time1 time2)
              ))
-  ))
+  ))))
