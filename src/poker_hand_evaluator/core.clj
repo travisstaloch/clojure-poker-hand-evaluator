@@ -173,13 +173,13 @@ TODO:
   [hand-index card-values]
   (and
     (not= (bit-and (.applyTo bit-and card-values) 0xF000) 0)
-    (aget #'flush-to-rank hand-index)))
+    (aget flush-to-rank hand-index)))
 
 (defn- unique-card-hand
   "Straights or High Card hands are resolved using a specific lookup table to resolve hand with 5 unique cards.
   This lookup will return a hand rank only for straights and high cards (0 for any other hand)."
   [hand-index]
-  (let [hand-rank (aget #'unique5-to-rank hand-index)]
+  (let [hand-rank (aget unique5-to-rank hand-index)]
     (and (not= hand-rank 0) hand-rank)))
 
 (comment "
@@ -240,7 +240,7 @@ private static int find(long u) {
          b (bit-and (unsigned-bit-shift-right x 8) 0x1ff)
          a (unsigned-bit-shift-right
              (bit-and (+ x (bit-shift-left x 2)) 0xffffffff) 19)
-         r (bit-xor a (aget #'hash-adjust b))]
+         r (bit-xor a (aget hash-adjust b))]
     r))
 ;; (fast-find-hash-adjust3 94352849)  ;; should == 7649
 
@@ -248,7 +248,7 @@ private static int find(long u) {
   (let [fn1 (fn [cv] (bit-and cv 0xFF))
         q (reduce * (map fn1 card-values))
         q-index (fast-find-hash-adjust q)]
-    (or (aget #'hash-values q-index) false)))
+    (or (aget hash-values q-index) false)))
 
 (defn- calculate-hand-rank
   "Uses the following strategies to find the hand rank, in order:
