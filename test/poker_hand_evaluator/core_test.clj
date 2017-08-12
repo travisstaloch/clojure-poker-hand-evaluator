@@ -242,7 +242,7 @@
 ])
 
 
-(if (env :performance-test) (do
+(comment (if (env :performance-test) (do
 
 (defn random-hand-ncards [n]
   (gen/vector-distinct
@@ -280,7 +280,7 @@
 (deftest speed-test3
   (testing "binary search vs perfect hashing performance comparison 9 card hands"
            (speed-test-fn "3. (9 cards)" benchmark-runs 9 rk7)
-           (is true)))
+           (is true))))
 
 (comment (deftest array-lookup-speed-test
   (testing "are int-array lookups faster than ArrayList?"

@@ -1,4 +1,4 @@
-(ns poker-hand-evaluator.lookup-tables)
+;;(ns poker-hand-evaluator.lookup-tables)
 
 (def flush-to-rank
 (int-array

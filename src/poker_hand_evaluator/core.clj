@@ -1,11 +1,13 @@
 (ns poker-hand-evaluator.core
-  (:use [poker-hand-evaluator.lookup-tables]
-        [poker-hand-evaluator.lookup-tables-bin-search]
+  (:use ;;[poker-hand-evaluator.lookup-tables]
+;;        [poker-hand-evaluator.lookup-tables-bin-search]
         [clojure.math.combinatorics]
         [clojure.stacktrace]
         ;;[clj-stacktrace.core]
-        ))
+        )
+  (:gen-class))
 
+(load-file "src/poker_hand_evaluator/lookup_tables.clj.eclj")
 
 (comment "
 - By Travis Staloch
@@ -45,12 +47,12 @@ testing omaha.
 - Changed from ArrayList lookup tables to int-array for slight performance gain.
 Had to include custom binary-search implementation which uses aget.
 - Added omaha-hi-low evaluation
+- Removed binary search dead code
+- Renamed lookup_tables.clj to lookup_tables.clj.eclj (an extension I made up) in order to
+work around 'Method code too large!' compiler error message.  Now jar/uberjar compiles.
+Added configuration for code to actually get included in jar.
 
 TODO:
-X - Add tests for hi-low evaluations
-X - Add omaha-hi-low evaluation
-- remove binary search lookup tables and code or figure out how to exclude ns in project file
-or firgure out if clojure compiler does dead code elimination for us (dont think so)
 
 ")
 
@@ -171,13 +173,13 @@ or firgure out if clojure compiler does dead code elimination for us (dont think
   [hand-index card-values]
   (and
     (not= (bit-and (.applyTo bit-and card-values) 0xF000) 0)
-    (aget flush-to-rank hand-index)))
+    (aget #'flush-to-rank hand-index)))
 
 (defn- unique-card-hand
   "Straights or High Card hands are resolved using a specific lookup table to resolve hand with 5 unique cards.
   This lookup will return a hand rank only for straights and high cards (0 for any other hand)."
   [hand-index]
-  (let [hand-rank (aget unique5-to-rank hand-index)]
+  (let [hand-rank (aget #'unique5-to-rank hand-index)]
     (and (not= hand-rank 0) hand-rank)))
 
 (comment "
@@ -238,7 +240,7 @@ private static int find(long u) {
          b (bit-and (unsigned-bit-shift-right x 8) 0x1ff)
          a (unsigned-bit-shift-right
              (bit-and (+ x (bit-shift-left x 2)) 0xffffffff) 19)
-         r (bit-xor a (aget hash-adjust b))]
+         r (bit-xor a (aget #'hash-adjust b))]
     r))
 ;; (fast-find-hash-adjust3 94352849)  ;; should == 7649
 
@@ -246,7 +248,7 @@ private static int find(long u) {
   (let [fn1 (fn [cv] (bit-and cv 0xFF))
         q (reduce * (map fn1 card-values))
         q-index (fast-find-hash-adjust q)]
-    (or (aget hash-values q-index) false)))
+    (or (aget #'hash-values q-index) false)))
 
 (defn- calculate-hand-rank
   "Uses the following strategies to find the hand rank, in order:
@@ -355,7 +357,7 @@ private static int find(long u) {
   "when given hand as one string (ie askcad2c5h) split into list of cards"
   [hand] (map #(clojure.string/join %) (partition 2 hand)))
 
-(defn binary-search
+(comment (defn binary-search
   "Finds earliest occurrence of x in xs (a vector) using binary search."
   ([xs x]
    (loop [l 0 h (unchecked-dec (count xs))]
@@ -397,4 +399,5 @@ private static int find(long u) {
 
 (defn evaluate-b
   "Evaluates a poker hand. If it contains more than 5 cards, it returns the best hand possible"
-  [& hand] (highest-rank (evaluate-all-combinations-b hand)))
+  [& hand] (highest-rank (evaluate-all-combinations-b hand))))
+

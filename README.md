@@ -43,8 +43,8 @@ hi-low evaluation:
 omaha-hi-low evaluation:
 ```clojure
 (evaluate-omaha-hi-low ["2c" "3d" "4s" "5c" "7h"] ["2d" "3h" "8d" "9h"])
-;= {:hi {:cards '("2d" "3h" "2c" "3d" "7h"), :rank 3322, :hand :TwoPairs},
-;;  :low {:cards '("2d" "3h" "4s" "5c" "7h"), :rank 7462, :hand :HighCard}}
+;= {:hi {:rank 3322, :hand :TwoPairs, :cards '("2d" "3h" "2c" "3d" "7h")},
+;;  :low {:rank 7462, :hand :HighCard, :cards '("2d" "3h" "4s" "5c" "7h")}}
 ```
 
 
@@ -65,6 +65,6 @@ lein quickie
 ## How it works
 
 This implementation is currently based on [Kevin Suffecool's poker hand evaluator](http://www.suffecool.net/poker/evaluator.html)  (aka Cactus Kev's Poker Hand Evaluator).
-[And Paul Senzee's perfect hash implementation](http://www.paulsenzee.com/2006/06/some-perfect-hash.html)
-[And a nice Java implementation of perfect hashing](https://github.com/baleful/Poker-Hand-Evaluator)
-Perfect hashing seems to be 2 to 3 times faster than binary searching for 100-1000 samples.
+And [Paul Senzee's perfect hash implementation](http://www.paulsenzee.com/2006/06/some-perfect-hash.html).
+And a nice [Java implementation of perfect hashing](https://github.com/baleful/Poker-Hand-Evaluator).
+This perfect hashing implementation seems to be 2 to 3 times faster than binary searching for 100-1000 samples.
